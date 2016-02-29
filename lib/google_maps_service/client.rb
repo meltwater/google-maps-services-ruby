@@ -1,4 +1,5 @@
-require 'hurley'
+require 'faraday'
+require 'faraday_middleware'
 require 'multi_json'
 require 'retriable'
 require 'thread'
@@ -12,6 +13,19 @@ require 'google_maps_service/apis/elevation'
 require 'google_maps_service/apis/geocoding'
 require 'google_maps_service/apis/roads'
 require 'google_maps_service/apis/time_zone'
+
+module Faraday
+  module NestedParamsEncoder
+    def self.escape(arg)
+      arg
+    end
+  end
+  module FlatParamsEncoder
+    def self.escape(arg)
+      arg
+    end
+  end
+end
 
 module GoogleMapsService
 
@@ -53,6 +67,13 @@ module GoogleMapsService
     # the appropriate amount of time before it runs the current query.
     # @return [Integer]
     attr_reader :queries_per_second
+
+    # TODO: Adapt documentation below, replace all Hurley-relevant parts with Faraday!
+    # TODO: Adapt documentation below, replace all Hurley-relevant parts with Faraday!
+    # TODO: Adapt documentation below, replace all Hurley-relevant parts with Faraday!
+    # TODO: Adapt documentation below, replace all Hurley-relevant parts with Faraday!
+    # TODO: Adapt documentation below, replace all Hurley-relevant parts with Faraday!
+
 
     # Construct Google Maps Web Service API client.
     #
@@ -119,7 +140,7 @@ module GoogleMapsService
     end
 
     # Get the current HTTP client.
-    # @return [Hurley::Client]
+    # @return [Faraday]
     def client
       @client ||= new_client
     end
@@ -139,24 +160,18 @@ module GoogleMapsService
     # Create a new HTTP client.
     # @return [Hurley::Client]
     def new_client
-      client = Hurley::Client.new
-      client.request_options.query_class = Hurley::Query::Flat
-      client.request_options.redirection_limit = 0
-      client.header[:user_agent] = user_agent
+      @connection = Faraday.new(:url => DEFAULT_BASE_URL) do |faraday|
 
-      client.connection = @connection if @connection
-      @request_options.each_pair {|key, value| client.request_options[key] = value } if @request_options
-      @ssl_options.each_pair {|key, value| client.ssl_options[key] = value } if @ssl_options
+        @request_options.each_pair {|key, value| faraday[key] = value } if @request_options
+        @ssl_options.each_pair {|key, value| faraday[key] = value } if @ssl_options
 
-      client
-    end
-
-    # Build the user agent header
-    # @return [String]
-    def user_agent
-      sprintf('google-maps-services-ruby/%s %s',
-              GoogleMapsService::VERSION,
-              GoogleMapsService::OS_VERSION)
+        faraday.request  :url_encoded             # form-encode POST params
+        faraday.response :logger                  # log requests to STDOUT
+        faraday.headers['Content-Type'] = 'application/json'
+        faraday.headers['Accept'] = 'application/json'
+        faraday.adapter  Faraday.default_adapter  # make requests with Net::HTTP
+        faraday.use FaradayMiddleware::FollowRedirects, limit: 0
+      end
     end
 
     # Make API call.
@@ -220,19 +235,19 @@ module GoogleMapsService
       end
 
       if accepts_client_id and @client_id and @client_secret
-        params << ["client", @client_id]
+        params << ['client', @client_id]
 
         path = [path, GoogleMapsService::Url.urlencode_params(params)].join("?")
         sig = GoogleMapsService::Url.sign_hmac(@client_secret, path)
-        return path + "&signature=" + sig
+        return path + '&signature=' + sig
       end
 
       if @key
-        params << ["key", @key]
+        params << ['key', @key]
         return path + "?" + GoogleMapsService::Url.urlencode_params(params)
       end
 
-      raise ArgumentError, "Must provide API key for this API. It does not accept enterprise credentials."
+      raise ArgumentError, 'Must provide API key for this API. It does not accept enterprise credentials.'
     end
 
     # Extract and parse body response as hash. Throw an error if there is something wrong with the response.
@@ -241,6 +256,16 @@ module GoogleMapsService
     #
     # @return [Hash] Response body as hash. The hash key will be symbolized.
     def decode_response_body(response)
+
+      # TODO: The response coming back is not correctly parsed, yet! This here needs more work.
+      # TODO: The response coming back is not correctly parsed, yet! This here needs more work.
+      # TODO: The response coming back is not correctly parsed, yet! This here needs more work.
+      # TODO: The response coming back is not correctly parsed, yet! This here needs more work.
+      # TODO: The response coming back is not correctly parsed, yet! This here needs more work.
+
+      puts '---------------- response --------------'
+      puts response.inspect
+      puts '---------------- response:end --------------'
       check_response_status_code(response)
       body = MultiJson.load(response.body, :symbolize_keys => true)
       check_body_error(response, body)
